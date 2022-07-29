@@ -29,7 +29,7 @@ import sys
 sys.stdout = Unbuffered(sys.stdout)
 
 def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_levels, start_level,
-             timesteps_per_proc, locacoinrun_draw_bars, is_test_worker=False, log_dir='/tmp/procgen', comm=None):
+             timesteps_per_proc, locacoinrun_draw_bars, is_test_worker=False, log_dir='/tmp/procgen', comm=None, args=None):
     learning_rate = 5e-4
     ent_coef = .01
     gamma = .999
@@ -40,6 +40,21 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
     clip_range = .2
     use_vf_clipping = True
 
+    if args.loca_training:
+        print("starting loca training")
+        assert (args.phase_1_len + args.phase_2_len + args.phase_3_len) == (timesteps_per_proc/1e6),\
+            "sum of loca phases not equal to total timesteps planned: {} vs {}".format(args.phase_1_len + args.phase_2_len + args.phase_3_len, timesteps_per_proc/1e6)
+        loca_params = {"phase_1_len": args.phase_1_len,
+                       "phase_2_len": args.phase_2_len,
+                       "phase_3_len": args.phase_3_len}
+        # launching phase 1 directly
+        locacoinrun_reward_phase = 1
+    else:
+        loca_params = None
+        locacoinrun_reward_phase = 0  # i.e. regular rewards
+
+
+
     mpi_rank_weight = 0 if is_test_worker else 1
     num_levels = 0 if is_test_worker else num_levels
 
@@ -49,15 +64,17 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
         logger.configure(comm=log_comm, dir=log_dir, format_strs=format_strs)
 
     logger.info("creating environment")
+
     venv = ProcgenEnv(num_envs=num_envs, env_name=env_name, num_levels=num_levels, start_level=start_level,
-                      distribution_mode=distribution_mode, locacoinrun_draw_bars=locacoinrun_draw_bars)
+                      distribution_mode=distribution_mode, locacoinrun_draw_bars=locacoinrun_draw_bars, locacoinrun_reward_phase=locacoinrun_reward_phase)
     venv = VecExtractDictObs(venv, "rgb")
 
     venv = VecMonitor(
         venv=venv, filename=None, keep_buf=100,
     )
-
-    venv = VecNormalize(venv=venv, ob=False)
+    if args.normalize_rewards == True:
+        print("normalizing rewards")
+        venv = VecNormalize(venv=venv, ob=False)
 
     logger.info("creating tf session")
     setup_mpi_gpus()
@@ -106,14 +123,23 @@ def main():
     parser.add_argument('--num_levels', type=int, default=0)
     parser.add_argument('--start_level', type=int, default=0)
     parser.add_argument('--test_worker_interval', type=int, default=0)
-    parser.add_argument('--timesteps_per_proc', type=int, default=50_000_000)
+    parser.add_argument('--timesteps_per_proc', type=int, default=9_000_000)
     parser.add_argument('--nsteps', type=int, default=256)
     parser.add_argument('--nminibatches', type=int, default=8)
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--locacoinrun_draw_bars', action='store_true', default=True)
     parser.add_argument('--no_locacoinrun_draw_bars', dest='locacoinrun_draw_bars', action='store_false')
+    parser.add_argument('--normalize_rewards', action='store_true', default=False)
     parser.add_argument('--result_dir', default='/gpfsscratch/rech/imi/uxo14qj/storage/ogprocgen_results',  # os.path.join(os.getcwd()
                         help="Directory Path to store results (default: %(default)s)")
+
+    #Loca parameters
+    parser.add_argument('--loca_training', action='store_true', default=True)
+    parser.add_argument('--no_loca_training', dest='loca_training', action='store_false')
+    parser.add_argument('--phase_1_len', type=int, default=3)
+    parser.add_argument('--phase_2_len', type=int, default=3)
+    parser.add_argument('--phase_3_len', type=int, default=3)
+
 
     args = parser.parse_args()
 
@@ -141,7 +167,7 @@ def main():
         args.locacoinrun_draw_bars,
         is_test_worker=is_test_worker,
         comm=comm,
-        log_dir=log_dir)
+        log_dir=log_dir, args=args)
 
 if __name__ == '__main__':
     main()

@@ -217,6 +217,7 @@ class ProcgenGym3Env(BaseProcgenEnv):
         paint_vel_info=False,
         locacoinrun_draw_bars=True,
         locacoinrun_restrict_spawn=False,
+        locacoinrun_reward_phase=0,
         distribution_mode="hard",
         **kwargs,
     ):
@@ -243,6 +244,7 @@ class ProcgenGym3Env(BaseProcgenEnv):
                 "use_monochrome_assets": bool(use_monochrome_assets),
                 "locacoinrun_draw_bars": bool(locacoinrun_draw_bars),
                 "locacoinrun_restrict_spawn": bool(locacoinrun_restrict_spawn),
+                "locacoinrun_reward_phase": int(locacoinrun_reward_phase),
                 "restrict_themes": bool(restrict_themes),
                 "use_backgrounds": bool(use_backgrounds),
                 "paint_vel_info": bool(paint_vel_info),

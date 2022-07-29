@@ -122,6 +122,7 @@ def main():
         "use_monochrome_assets": args.use_monochrome_assets,
         "locacoinrun_draw_bars": True,
         "locacoinrun_restrict_spawn": False,
+        "locacoinrun_reward_phase": 2,
     }
     if args.env_name != "coinrun_old":
         kwargs["distribution_mode"] = args.distribution_mode

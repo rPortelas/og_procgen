@@ -9,8 +9,9 @@
 const std::string NAME = "locacoinrun";
 
 const float GOAL_REWARD = 10.0f;
-//const float LEFT_GOAL_REWARD = 10.0f;
-//const float RIGHT_GOAL_REWARD = 10.0f;
+const float LOCA_GOAL_R_HIGH = 4.0f;
+const float LOCA_GOAL_R_MED = 2.0f;
+const float LOCA_GOAL_R_LOW = 1.0f;
 
 const int GOAL = 1;
 const int GOAL2 = 42; // added this id to differentiate the leftmost coin
@@ -55,6 +56,7 @@ class LocaCoinRun : public BasicAbstractGame {
     float leftcoin_pos = -1;
     float rightcoin_pos = -1;
     float last_section_x = -1; // Added this to enforce 1-way passage near right coin
+
 
 
 
@@ -159,7 +161,27 @@ class LocaCoinRun : public BasicAbstractGame {
     void handle_grid_collision(const std::shared_ptr<Entity> &obj, int type, int i, int j) override {
         if (obj->type == PLAYER) {
             if (type == GOAL || type == GOAL2) {
-                step_data.reward += GOAL_REWARD;
+                switch (options.locacoinrun_reward_phase)  {
+                    case 1: // LOCA PHASE 1
+                        if (type == GOAL){
+                            step_data.reward += LOCA_GOAL_R_HIGH;
+                        } else {
+                            step_data.reward += LOCA_GOAL_R_MED;
+                        }
+                        break;
+
+                    case 2: // LOCA PHASE 2
+                    case 3: // also applies for LOCA PHASE 3
+                        if (type == GOAL){
+                            step_data.reward += LOCA_GOAL_R_LOW;
+                        } else {
+                            step_data.reward += LOCA_GOAL_R_MED;
+                        }
+                        break;
+                    default:
+                        // the regular coinrun payoff
+                        step_data.reward += GOAL_REWARD;
+                }
                 step_data.done = true;
                 step_data.level_complete = true;
 //                std::cout << "agent pos is " << agent->x << "\n";

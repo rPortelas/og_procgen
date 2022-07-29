@@ -50,6 +50,7 @@ void Game::parse_options(std::string name, VecOptions opts) {
     opts.consume_bool("use_sequential_levels", &options.use_sequential_levels);
     opts.consume_bool("locacoinrun_draw_bars", &options.locacoinrun_draw_bars);
     opts.consume_bool("locacoinrun_restrict_spawn", &options.locacoinrun_restrict_spawn);
+    opts.consume_int("locacoinrun_reward_phase", &options.locacoinrun_reward_phase);
 
     int dist_mode = EasyMode;
     opts.consume_int("distribution_mode", &dist_mode);
@@ -179,6 +180,7 @@ void Game::serialize(WriteBuffer *b) {
     b->write_int(options.use_monochrome_assets);
     b->write_int(options.locacoinrun_draw_bars);
     b->write_int(options.locacoinrun_restrict_spawn);
+    b->write_int(options.locacoinrun_reward_phase);
     b->write_int(options.restrict_themes);
     b->write_int(options.use_backgrounds);
     b->write_int(options.center_agent);
@@ -241,6 +243,7 @@ void Game::deserialize(ReadBuffer *b) {
     options.use_monochrome_assets = b->read_int();
     options.locacoinrun_draw_bars = b->read_int();
     options.locacoinrun_restrict_spawn = b->read_int();
+    options.locacoinrun_reward_phase = b->read_int();
     options.restrict_themes = b->read_int();
     options.use_backgrounds = b->read_int();
     options.center_agent = b->read_int();

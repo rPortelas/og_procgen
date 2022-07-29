@@ -54,6 +54,7 @@ struct GameOptions {
     bool use_sequential_levels = false;
     bool locacoinrun_draw_bars = true;
     bool locacoinrun_restrict_spawn = false;
+    int locacoinrun_reward_phase = 0;
 
     // coinrun_old
     bool use_easy_jump = false;

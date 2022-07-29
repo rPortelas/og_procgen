@@ -55,7 +55,10 @@ class Runner(AbstractEnvRunner):
 
             mb_rewards.append(rewards)
 
-        print(f"number of time the closest coin was collected when any coin collected: {nb_good_coin/nb_success}({nb_success}/{nb_eps}tot eps)")
+        if nb_success > 0 and nb_eps > 0:
+            print(f"number of time the closest coin was collected when any coin collected: {nb_good_coin/nb_success}({nb_success}/{nb_eps}tot eps)")
+        else:
+            print(f"cannot get good coin stats: {nb_success}successes over {nb_eps}eps")
         #batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
