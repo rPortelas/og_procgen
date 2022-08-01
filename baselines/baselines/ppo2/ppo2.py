@@ -6,12 +6,14 @@ from baselines import logger
 from collections import deque
 from baselines.common import explained_variance, set_global_seeds
 from baselines.common.policies import build_policy
+from train_procgen.env_make_utils import setup_loca
 import tensorflow as tf
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
 from baselines.ppo2.runner import Runner
+from baselines.ppo2.test_runner import TestRunner
 
 
 def constfn(val):
@@ -22,7 +24,7 @@ def constfn(val):
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, **network_kwargs):
+            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, loca_params=None, **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
 
@@ -113,21 +115,31 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     # Instantiate the runner object
     runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
     if eval_env is not None:
-        eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
+        eval_runner = TestRunner(feed_shape = env.num_envs, env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
 
     epinfobuf = deque(maxlen=100)
     if eval_env is not None:
-        eval_epinfobuf = deque(maxlen=100)
+        eval_epinfobuf = deque(maxlen=eval_env.num_envs)
+    eval_freq = 10
 
     if init_fn is not None:
         init_fn()
+
+    if loca_params:
+        phase_2_start = loca_params['phase_1_len']
+        phase_3_start = loca_params['phase_1_len'] + loca_params['phase_2_len']
+        current_phase = 1
 
     # Start total timer
     tfirststart = time.perf_counter()
 
     nupdates = total_timesteps//nbatch
+    eval_step = False
     for update in range(1, nupdates+1):
         assert nbatch % nminibatches == 0
+        if ((update-1) % eval_freq) == 0:
+            eval_step = True
+
         # Start timer
         tstart = time.perf_counter()
         frac = 1.0 - (update - 1.0) / nupdates
@@ -142,18 +154,23 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
         # Get minibatch
         obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
-        if eval_env is not None:
-            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
+        if eval_env is not None and eval_step:
+            teval = time.perf_counter()
+            _, _, _, _, _, _, _, eval_epinfos = eval_runner.run() #pylint: disable=E0632
+            #print(eval_epinfos)
+            assert len(eval_epinfos) == eval_env.num_envs
 
         tendbatch = time.perf_counter()
         print(f"env_collect: {tendbatch - tbatch}")
+        if eval_env and eval_step:
+            print(f"including an eval taking {tendbatch-teval}")
         tupdate = time.perf_counter()
 
 
         if update % log_interval == 0 and is_mpi_root: logger.info('Done.')
 
         epinfobuf.extend(epinfos)
-        if eval_env is not None:
+        if eval_env is not None and eval_step:
             eval_epinfobuf.extend(eval_epinfos)
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
@@ -224,6 +241,36 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
             savepath = osp.join(checkdir, '%.5i'%update)
             print('Saving to', savepath)
             model.save(savepath)
+        eval_step = False
+
+        if loca_params:
+            nb_timesteps = (update*nbatch) / 1e6
+            change_phase = False
+            if current_phase == 1 and nb_timesteps >= phase_2_start:
+                change_phase = True
+                print("###########STARTING LOCA PHASE 2 #############")
+                current_phase = 2
+            if current_phase == 2 and nb_timesteps >= phase_3_start and change_phase == False:
+                change_phase = True
+                print("###########STARTING LOCA PHASE 3 #############")
+                current_phase = 3
+            if change_phase:
+                env, eval_env = setup_loca(env, eval_env, current_phase)
+                # empty reward buffer
+                epinfobuf = deque(maxlen=100)
+                eval_epinfobuf = deque(maxlen=eval_env.num_envs)
+                eval_step = True  # re-run eval to avoid discontinuity in eval perf curve
+                # recreate runner and test runner with new envs
+                runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+                eval_runner = TestRunner(feed_shape=env.num_envs, env=eval_env, model=model, nsteps=nsteps,
+                                         gamma=gamma, lam=lam)
+
+            change_phase = False
+
+
+
+
+
 
     return model
 # Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)

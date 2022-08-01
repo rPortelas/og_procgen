@@ -121,6 +121,10 @@ void Game::reset() {
 }
 
 void Game::step() {
+    if (action == -2) {
+        return;
+    }
+
     cur_time += 1;
     bool will_force_reset = false;
 

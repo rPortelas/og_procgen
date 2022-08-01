@@ -6,6 +6,9 @@ import gym3
 from gym3.libenv import CEnv
 import numpy as np
 from .builder import build
+from baselines.common.vec_env import (
+    VecEnvWrapper
+)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -265,8 +268,13 @@ class ToBaselinesVecEnv(gym3.ToBaselinesVecEnv):
             if "rgb" in info:
                 return info["rgb"]
             else:
-                return ob['rgb'][0]        
-
+                return ob['rgb'][0]
+    @property
+    def unwrapped(self):
+        if isinstance(self, VecEnvWrapper):
+            return self.venv.unwrapped
+        else:
+            return self
 
 def ProcgenEnv(num_envs, env_name, **kwargs):
     return ToBaselinesVecEnv(ProcgenGym3Env(num=num_envs, env_name=env_name, **kwargs))

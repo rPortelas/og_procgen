@@ -9,6 +9,7 @@ from baselines.common.vec_env import (
     VecFrameStack,
     VecNormalize
 )
+from train_procgen.env_make_utils import make_env, setup_loca
 from baselines import logger
 from mpi4py import MPI
 import argparse
@@ -28,7 +29,8 @@ class Unbuffered(object):
 import sys
 sys.stdout = Unbuffered(sys.stdout)
 
-def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_levels, start_level,
+
+def train_fn(env_name, num_envs, num_test_envs, nsteps, nminibatches, distribution_mode, num_levels, start_level,
              timesteps_per_proc, locacoinrun_draw_bars, is_test_worker=False, log_dir='/tmp/procgen', comm=None, args=None):
     learning_rate = 5e-4
     ent_coef = .01
@@ -53,8 +55,6 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
         loca_params = None
         locacoinrun_reward_phase = 0  # i.e. regular rewards
 
-
-
     mpi_rank_weight = 0 if is_test_worker else 1
     num_levels = 0 if is_test_worker else num_levels
 
@@ -63,18 +63,22 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
         format_strs = ['csv', 'stdout'] if log_comm.Get_rank() == 0 else []
         logger.configure(comm=log_comm, dir=log_dir, format_strs=format_strs)
 
-    logger.info("creating environment")
+    env_kwargs={'num_levels': num_levels,
+                'start_level': start_level,
+                'distribution_mode': distribution_mode,
+                'locacoinrun_draw_bars': locacoinrun_draw_bars,
+                'locacoinrun_reward_phase': locacoinrun_reward_phase}
 
-    venv = ProcgenEnv(num_envs=num_envs, env_name=env_name, num_levels=num_levels, start_level=start_level,
-                      distribution_mode=distribution_mode, locacoinrun_draw_bars=locacoinrun_draw_bars, locacoinrun_reward_phase=locacoinrun_reward_phase)
-    venv = VecExtractDictObs(venv, "rgb")
+    venv = make_env(num_envs, env_name=env_name, **env_kwargs)
 
-    venv = VecMonitor(
-        venv=venv, filename=None, keep_buf=100,
-    )
-    if args.normalize_rewards == True:
-        print("normalizing rewards")
-        venv = VecNormalize(venv=venv, ob=False)
+    if num_test_envs > 0:  # adding test vectorized environment
+        test_env_kwargs = env_kwargs.copy()
+        # fix test set across experiments
+        test_env_kwargs['start_level'] = 42
+        test_env_kwargs['num_levels'] = num_test_envs
+        test_venv = make_env(num_test_envs, env_name=env_name, **test_env_kwargs)  # fixed levels for testing
+    else:
+        test_venv = None
 
     logger.info("creating tf session")
     setup_mpi_gpus()
@@ -94,6 +98,7 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
     logger.info("training")
     ppo2.learn(
         env=venv,
+        eval_env=test_venv,
         network=conv_fn,
         total_timesteps=timesteps_per_proc,
         save_interval=0,
@@ -113,6 +118,7 @@ def train_fn(env_name, num_envs, nsteps, nminibatches, distribution_mode, num_le
         init_fn=None,
         vf_coef=0.5,
         max_grad_norm=0.5,
+        loca_params=loca_params,
     )
 
 def main():
@@ -125,6 +131,7 @@ def main():
     parser.add_argument('--test_worker_interval', type=int, default=0)
     parser.add_argument('--timesteps_per_proc', type=int, default=9_000_000)
     parser.add_argument('--nsteps', type=int, default=256)
+    parser.add_argument('--nb_test_episodes', type=int, default=0)
     parser.add_argument('--nminibatches', type=int, default=8)
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--locacoinrun_draw_bars', action='store_true', default=True)
@@ -136,9 +143,9 @@ def main():
     #Loca parameters
     parser.add_argument('--loca_training', action='store_true', default=True)
     parser.add_argument('--no_loca_training', dest='loca_training', action='store_false')
-    parser.add_argument('--phase_1_len', type=int, default=3)
-    parser.add_argument('--phase_2_len', type=int, default=3)
-    parser.add_argument('--phase_3_len', type=int, default=3)
+    parser.add_argument('--phase_1_len', type=float, default=5)
+    parser.add_argument('--phase_2_len', type=float, default=5)
+    parser.add_argument('--phase_3_len', type=float, default=15)
 
 
     args = parser.parse_args()
@@ -158,6 +165,7 @@ def main():
 
     train_fn(args.env_name,
         args.num_envs,
+        args.nb_test_episodes,
         args.nsteps,
         args.nminibatches,
         args.distribution_mode,
