@@ -33,7 +33,7 @@ sys.stdout = Unbuffered(sys.stdout)
 def train_fn(env_name, num_envs, num_test_envs, nsteps, nminibatches, distribution_mode, num_levels, start_level,
              timesteps_per_proc, locacoinrun_draw_bars, is_test_worker=False, log_dir='/tmp/procgen', comm=None, args=None):
     learning_rate = 5e-4
-    ent_coef = .01
+    ent_coef = args.ent
     gamma = .999
     lam = .95
     #nsteps = 256
@@ -44,11 +44,12 @@ def train_fn(env_name, num_envs, num_test_envs, nsteps, nminibatches, distributi
 
     if args.loca_training:
         print("starting loca training")
-        assert (args.phase_1_len + args.phase_2_len + args.phase_3_len) == (timesteps_per_proc/1e6),\
-            "sum of loca phases not equal to total timesteps planned: {} vs {}".format(args.phase_1_len + args.phase_2_len + args.phase_3_len, timesteps_per_proc/1e6)
+        timesteps_per_proc = (args.phase_1_len + args.phase_2_len + args.phase_3_len) * 1e6
+        print('new number of timesteps based on loca phases --> {}steps'.format(timesteps_per_proc))
         loca_params = {"phase_1_len": args.phase_1_len,
                        "phase_2_len": args.phase_2_len,
                        "phase_3_len": args.phase_3_len}
+
         # launching phase 1 directly
         locacoinrun_reward_phase = 1
     else:
@@ -69,7 +70,7 @@ def train_fn(env_name, num_envs, num_test_envs, nsteps, nminibatches, distributi
                 'locacoinrun_draw_bars': locacoinrun_draw_bars,
                 'locacoinrun_reward_phase': locacoinrun_reward_phase}
 
-    venv = make_env(num_envs, env_name=env_name, **env_kwargs)
+    venv = make_env(num_envs, env_name=env_name, normalize=args.normalize_rewards, **env_kwargs)
 
     if num_test_envs > 0:  # adding test vectorized environment
         test_env_kwargs = env_kwargs.copy()
@@ -133,6 +134,7 @@ def main():
     parser.add_argument('--nsteps', type=int, default=256)
     parser.add_argument('--nb_test_episodes', type=int, default=0)
     parser.add_argument('--nminibatches', type=int, default=8)
+    parser.add_argument('--ent', type=float, default=.01)
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--locacoinrun_draw_bars', action='store_true', default=True)
     parser.add_argument('--no_locacoinrun_draw_bars', dest='locacoinrun_draw_bars', action='store_false')
