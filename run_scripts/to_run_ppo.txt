@@ -1,0 +1,6 @@
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA6l2regTESTonly3 --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*phase_1_len 0 --*phase_2_len 0 --*phase_3_len 15
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA6l2reg --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*l2_coef 0.001 --*phase_3_len 20
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA6l2reg --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*l2_coef 0.005 --*phase_3_len 20
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA6l2reg --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*l2_coef 0.0001 --*phase_3_len 20
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA6l2reg --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*l2_coef 0.00001 --*phase_3_len 20
+--slurm_conf jeanzay_xtrashort --nb_seeds 4 --seeds_per_nodes 1 --exp_name PPO_LOCA5NOl2reg --*env_name locacoinrun --*distribution_mode easy  --nb_test_episodes 256 --*phase_3_len 20

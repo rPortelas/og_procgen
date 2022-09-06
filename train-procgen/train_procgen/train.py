@@ -119,6 +119,7 @@ def train_fn(env_name, num_envs, num_test_envs, nsteps, nminibatches, distributi
         init_fn=None,
         vf_coef=0.5,
         max_grad_norm=0.5,
+        l2_coef=args.l2_coef,
         loca_params=loca_params,
     )
 
@@ -148,6 +149,8 @@ def main():
     parser.add_argument('--phase_1_len', type=float, default=5)
     parser.add_argument('--phase_2_len', type=float, default=5)
     parser.add_argument('--phase_3_len', type=float, default=15)
+    parser.add_argument('--l2_coef', type=float, default=None)
+    
 
 
     args = parser.parse_args()

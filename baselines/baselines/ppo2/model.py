@@ -25,7 +25,7 @@ class Model(object):
     - Save load the model
     """
     def __init__(self, *, policy, ob_space, ac_space, nbatch_act, nbatch_train,
-                nsteps, ent_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
+                nsteps, ent_coef, vf_coef, l2_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
         self.sess = sess = get_session()
 
         if MPI is not None and comm is None:
@@ -93,6 +93,17 @@ class Model(object):
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
         params = tf.trainable_variables('ppo2_model')
+        
+        #### NEW PART --> ADD L2 reg loss
+        if l2_coef is not None:
+            print("Using l2 reg with coef {}".format(l2_coef))
+            weight_params = [v for v in params if '/b' not in v.name]
+            l2_loss = tf.reduce_sum([tf.nn.l2_loss(v) for v in weight_params])
+            loss += l2_loss * l2_coef
+        else:
+            l2_loss = None
+        ####
+        
         # 2. Build our trainer
         if comm is not None and comm.Get_size() > 1:
             self.trainer = MpiAdamOptimizer(comm, learning_rate=LR, mpi_rank_weight=mpi_rank_weight, epsilon=1e-5)
@@ -108,12 +119,14 @@ class Model(object):
         grads_and_var = list(zip(grads, var))
         # zip aggregate each gradient with parameters associated
         # For instance zip(ABCD, xyza) => Ax, By, Cz, Da
-
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac]
+        if l2_loss is not None:
+            self.loss_names.append('l2_loss')
+            self.stats_list.append(l2_loss)
 
 
         self.train_model = train_model
